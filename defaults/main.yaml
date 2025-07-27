@@ -14,8 +14,14 @@
 # NOTE: Ansible will override everything under the root boilerplate_ variable. 
 # Meaning you need to include all variables when overriding, else the other variables 
 # will not be found.
+#
+# Copy the below defaults into your host_var file and overwrite with host specific
+# variables
 # ------------------------------------------------------------------------------
 
 ---
 
 # ---------------------------- [ BOILERPLATE ] ---------------------------------
+
+boilerplate_hostname: "{{ ansible_hostname | default(ansible_hostname | default('computer')) }}"
+boilerplate_tz: "UTC"

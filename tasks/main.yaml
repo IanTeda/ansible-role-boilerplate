@@ -1,11 +1,11 @@
-# ------------------------------------------------------------------------------
+# ==============================================================================
 # BOILERPLATE ROLE MAIN TASKS
 # ------------------------------------------------------------------------------
 #
 # Main task file for the Boilerplate role.
 # Detects the operating system and includes appropriate task files.
 #
-# ------------------------------------------------------------------------------
+# ==============================================================================
 
 ---
 
@@ -13,23 +13,12 @@
   ansible.builtin.debug:
     msg: "Detected OS: {{ ansible_os_family }} ({{ ansible_distribution }} {{ ansible_distribution_version }})"
   tags:
-    - boilerplate
-    - debug
+    - always
 
 
 
-## Linux-specific tasks block
-# ------------------------------------------------------------------------------
-- name: Include Linux-specific tasks
-  when: ansible_system == "Linux" and ansible_os_family not in ["Debian", "RedHat"]
-  block:
-    - name: Starting the Linux Block
-      ansible.builtin.debug:
-        msg: "Starting tasks for Linux"
-
-
-
-## Debian family tasks block
+## DEBIAN FAMILY TASKS BLOCK
+# This block is run when "Debian" is the host operating systems
 # ------------------------------------------------------------------------------
 
 - name: Debian family tasks block
@@ -38,22 +27,26 @@
     - name: Starting the Debian Block
       ansible.builtin.debug:
         msg: "Starting tasks for Debian"
-
-    - name: Install <Service>
-      ansible.builtin.include_tasks: <service>-debian.yaml
       tags:
-        - <service>
-        - debian
+        - all
 
-    - name: Install <Service> Exporter
-      ansible.builtin.include_tasks: <service>-debian-exporter.yaml
+    - name: Configure Hostname & Time Zone
+      ansible.builtin.include_tasks: hostname-tz-linux.yaml
       tags:
-        - <service>
-        - <service>-exporter
-        - debian
+        - hostname-tz
+        - hostname
+        - tz
+
+    # - name: Configure Hostname & Time Zone
+    #   ansible.builtin.include_tasks: service-debian.yaml
+    #   tags:
+    #     - service
+    #     - debian
 
 
-## RedHat family tasks block
+
+## REDHAT FAMILY TASKS BLOCK
+# This block is run when "Redhat" is the host operating systems
 # ------------------------------------------------------------------------------
 - name: Include RedHat-specific tasks
   when: ansible_os_family == "RedHat"
@@ -70,5 +63,3 @@
   ansible.builtin.fail:
     msg: "Unsupported operating system: {{ ansible_os_family }} ({{ ansible_distribution }})"
   when: ansible_system != "Linux" and ansible_os_family not in ["Debian", "RedHat"]
-  tags:
-    - <service>

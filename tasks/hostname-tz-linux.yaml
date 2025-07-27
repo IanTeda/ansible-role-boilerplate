@@ -1,0 +1,54 @@
+---
+# =============================================================================
+# HOSTNAME AND TIMEZONE CONFIGURATION - ANSIBLE TASKS
+# -----------------------------------------------------------------------------
+#
+# This playbook sets the system hostname and timezone for a Linux-based system.
+#
+# Features:
+#   - Sets the hostname using the ansible.builtin.hostname module
+#   - Ensures the hostname is present in the 127.0.0.1 line of /etc/hosts
+#   - Sets the system timezone using the community.general.timezone module
+#   - Notifies a handler to restart the system or services if needed
+#
+# Variables (define in group_vars/host_vars):
+#   - hostname: Desired system hostname
+#   - tz: Desired timezone (e.g., "UTC", "America/New_York")
+#
+# Sections/Steps:
+#   1. Set hostname in /etc/hostname
+#   2. Ensure hostname is present in /etc/hosts
+#   3. Set system timezone
+#
+# Prerequisites:
+#   - community.general collection installed for timezone module
+#   - Handler named 'Restart Host' defined if restart is required
+# =============================================================================
+
+- name: Ensure hostname is set to "{{ boilerplate_hostname }}" in /etc/hostname
+  ansible.builtin.hostname: 
+    name: "{{ boilerplate_hostname }}"
+  notify: Restart Host
+  tags:
+    - config
+    - hostname
+
+- name: Ensure hostname "{{ boilerplate_hostname }}" is present in 127.0.0.1 line in /etc/hosts
+  ansible.builtin.lineinfile:
+    path: /etc/hosts
+    regexp: '^127\.0\.0\.1'
+    line: "{{ item }}"
+  loop:
+    - "{{ lookup('file', '/etc/hosts').splitlines() | select('match', '^127\\.0\\.0\\.1') | list | first | regex_replace('(?:\\s+{{ boilerplate_hostname }})?$', ' {{ boilerplate_hostname }}') }}"
+  notify: Restart Host
+  tags:
+    - config
+    - hostname
+
+- name: Set timezone to "{{ boilerplate_tz }}" for server
+  community.general.timezone:
+    name: "{{ boilerplate_tz }}"
+  notify: Restart Host
+  tags:
+    - config
+    - tz
