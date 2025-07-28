@@ -1,0 +1,121 @@
+## 00. SET <SERVICE> ANSIBLE FACTS
+# This makes it easier to read the ansible tasks
+# -----------------------------------------------------------------------------
+
+- name: Set Lazygit role facts
+  ansible.builtin.set_fact:
+    lazygit_download_url: "https://github.com/jesseduffield/lazygit/releases/download/v{{ boilerplate_lazygit.release }}/lazygit_{{ boilerplate_lazygit.release }}_Linux_x86_64.tar.gz"
+    lazygit_binary_path: "/usr/local/bin/lazygit"
+  tags:
+    - install
+    - config
+    - healthcheck
+    - uninstall
+
+- name: Display Lazygit variables for debugging
+  ansible.builtin.debug:
+    var: boilerplate_lazygit
+  tags:
+    - debug
+
+- name: Display Lazygit facts for debugging
+  ansible.builtin.debug:
+    msg:
+      - "Fact -> lazygit_download_url: {{ lazygit_download_url }}"
+      - "Fact -> lazygit_binary_path: {{ lazygit_binary_path }}"
+  tags:
+    - debug
+
+- name: Confirm Lazygit uninstallation
+  ansible.builtin.pause:
+    prompt: |
+      ⚠️  WARNING: Lazygit Uninstallation Confirmation ⚠️
+
+      You are about to completely uninstall the Lazygit service from this system.
+      
+      This will remove:
+      🗑️  Lazygit binary: {{ lazygit_binary_path }}
+
+      ❗ This action will stop metrics collection from your Lazygit instance!
+      📊 Historical metrics data in Prometheus will be preserved
+      
+      Are you sure you want to proceed with the uninstallation? (yes/no)
+  register: uninstall_confirmation
+  tags:
+    - never
+    - uninstall
+
+- name: Uninstallation Aborted
+  ansible.builtin.fail:
+    msg: |
+      🛑 Uninstallation aborted by user choice
+      
+      The <service> service remains installed and operational.
+      No changes have been made to the system.
+  when: not (uninstall_confirmation.user_input | bool)
+  tags:
+    - never
+    - uninstall
+
+
+
+## 01. DOWNLOAD BINARY AND INSTALL
+# This section downloads any Linux binary file,e and install into the `/usr/local/bin/`
+# -----------------------------------------------------------------------------
+
+- name: Download Lazygit tarball
+  ansible.builtin.get_url:
+    url: "{{ lazygit_download_url }}"
+    dest: /tmp/lazygit.tar.gz
+    mode: '0644'
+  tags:
+    - install
+
+- name: Extract Lazygit binary
+  ansible.builtin.unarchive:
+    src: /tmp/lazygit.tar.gz
+    dest: /tmp/
+    remote_src: yes
+  tags:
+    - install
+
+- name: Install Lazygit to "{{ lazygit_binary_path }}"
+  ansible.builtin.copy:
+    src: /tmp/lazygit
+    dest: "{{ lazygit_binary_path }}"
+    mode: '0755'
+    remote_src: yes
+  become: true
+  tags:
+    - install
+
+- name: Ensure Lazygit is available
+  ansible.builtin.command: lazygit --version
+  register: lazygit_version
+  changed_when: false
+  tags:
+    - install
+
+- name: Remove Lazygit downloaded tarball
+  ansible.builtin.file:
+    path: /tmp/lazygit.tar.gz
+    state: absent
+  tags:
+    - cleanup
+    - install
+
+- name: Remove extracted Lazygit binary from /tmp
+  ansible.builtin.file:
+    path: /tmp/lazygit
+    state: absent
+  tags:
+    - cleanup
+    - install
+
+- name: Remove Lazygit binary
+  ansible.builtin.file:
+    path: "{{ lazygit_binary_path }}"
+    state: absent
+  become: true
+  tags:
+    - uninstall

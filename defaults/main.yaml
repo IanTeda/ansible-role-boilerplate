@@ -47,3 +47,6 @@ boilerplate_base_packages:
   - unattended-upgrades           # Automatic installation of security updates
   - unzip                         # Unzip utility for .zip files
   - wget                          # Command-line file downloader
+
+boilerplate_lazygit:
+  release: "0.53.0"
