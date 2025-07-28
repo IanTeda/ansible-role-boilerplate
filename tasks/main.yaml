@@ -51,6 +51,11 @@
       ansible.builtin.include_tasks: fish-debian.yaml
       tags:
         - fish
+    
+    - name: Install NodeJS
+      ansible.builtin.include_tasks: nodejs-debian.yaml
+      tags:
+        - nodejs
 
 ## REDHAT FAMILY TASKS BLOCK
 # This block is run when "Redhat" is the host operating systems

@@ -49,8 +49,11 @@ boilerplate_base_packages:
   - wget                          # Command-line file downloader
 
 boilerplate_lazygit:
-  release: "0.53.0"
+  release: "0.53.0"  # <-- https://github.com/jesseduffield/lazygit/releases
 
 boilerplate_fish:
   users:
     - "{{ vault_default_user_name }}"
+
+boilerplate_nodejs:
+  release: 24 # <-- https://nodejs.org/en/download/releases/
