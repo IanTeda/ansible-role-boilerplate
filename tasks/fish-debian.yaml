@@ -1,0 +1,123 @@
+---
+# FISH SHELL INSTALLATION
+# ======================
+#
+# Installs and configures the Fish shell on Raspberry Pi.
+# Reference: https://fishshell.com/
+#
+# Usage:
+#   ansible-playbook playbook.yml --tags "fish, install, config, verify"
+#
+
+- name: Install Fish shell
+  ansible.builtin.apt:
+    name: fish
+    state: present
+    update_cache: yes
+  become: true
+  tags:
+    - install
+
+- name: Set Fish as default shell for users
+  ansible.builtin.user:
+    name: "{{ item }}"
+    shell: /usr/bin/fish
+  become: true
+  loop: "{{ boilerplate_fish.users }}"
+  tags:
+    - install
+    - config
+
+- name: Create Fish config directory
+  ansible.builtin.file:
+    path: "/home/{{ item }}/.config/fish"
+    state: directory
+    owner: "{{ item }}"
+    group: "{{ item }}"
+    mode: '0755'
+  become: true
+  loop: "{{ boilerplate_fish.users }}"
+  tags:
+    - install
+    - config
+
+- name: Deploy pretty Fish welcome message
+  ansible.builtin.copy:
+    dest: "/home/{{ item }}/.config/fish/config.fish"
+    content: |
+      # Remove default Fish greeting
+      set -U fish_greeting ""
+      # Pretty Fish Welcome
+      set_color cyan
+      echo "╔══════════════════════════════════════╗"
+      echo "║        Welcome to BTC Server         ║"
+      echo "╚══════════════════════════════════════╝"
+      echo
+      set_color normal
+      echo "Date: "(date)
+      echo "Hostname: "(hostname)
+      echo "IP Address: "(hostname -I | string trim)
+      echo "Uptime: "(uptime -p)
+      echo "Last login: "(last -n 2 {{ item }} | tail -n 1 | awk '{print $4, $5, $6, $7, $8, $NF}')
+      echo "CPU Temp: "(sensors 2>/dev/null | grep -m 1 'Package id 0:' | awk '{print $4}')
+      echo
+
+      # Bitcoin Knots node info
+      if type -q bitcoin-cli
+          set peers (bitcoin-cli getnetworkinfo 2>/dev/null | grep '"connections"' | awk '{print $2}' | tr -d ',')
+          set progress (bitcoin-cli getblockchaininfo 2>/dev/null | grep '"verificationprogress"' | awk '{print $2}' | tr -d ',')
+          if test -n "$peers"
+              echo "Bitcoin Knots Peers: $peers"
+          end
+          if test -n "$progress"
+              set percent (math "100 * $progress")
+              echo "Block Verification: "(printf "%.2f" $percent)"%"
+          end
+      end
+      echo
+      # ...add more custom info here...
+    owner: "{{ item }}"
+    group: "{{ item }}"
+    mode: '0644'
+  become: true
+  loop: "{{ boilerplate_fish.users }}"
+  tags:
+    - install
+    - config
+
+- name: Verify Fish installation
+  ansible.builtin.command: fish --version
+  register: fish_version
+  changed_when: false
+  tags:
+    - install
+    - config
+    - verify
+
+- name: Show Fish version
+  ansible.builtin.debug:
+    msg: "Fish shell version: {{ fish_version.stdout }}"
+  tags:
+    - verify
+
+- name: Verify Fish is the default shell for users
+  ansible.builtin.command: "getent passwd {{ item }}"
+  register: fish_shell_check
+  changed_when: false
+  loop: "{{ boilerplate_fish.users }}"
+  tags:
+    - install
+    - config
+    - verify
+
+- name: Assert Fish is the default shell for users
+  ansible.builtin.assert:
+    that:
+      - "'/usr/bin/fish' in (fish_shell_check.results | selectattr('item', 'equalto', item) | map(attribute='stdout') | list | first)"
+    fail_msg: "Fish is not the default shell for user {{ item }}!"
+    success_msg: "Fish is the default shell for user {{ item }}."
+  loop: "{{ boilerplate_fish.users }}"
+  tags:
+    - install
+    - config
+    - verify

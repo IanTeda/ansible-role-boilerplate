@@ -50,3 +50,7 @@ boilerplate_base_packages:
 
 boilerplate_lazygit:
   release: "0.53.0"
+
+boilerplate_fish:
+  users:
+    - "{{ vault_default_user_name }}"

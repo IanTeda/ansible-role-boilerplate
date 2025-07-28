@@ -37,13 +37,20 @@
         - hostname
         - tz
 
-    # - name: Configure Hostname & Time Zone
-    #   ansible.builtin.include_tasks: service-debian.yaml
-    #   tags:
-    #     - service
-    #     - debian
+    - name: Install base Debian packages
+      ansible.builtin.include_tasks: base-packages-debian.yaml
+      tags:
+        - base-packages
 
+    - name: Install Lazygit
+      ansible.builtin.include_tasks: lazygit-linux.yaml
+      tags:
+        - lazygit
 
+    - name: Install Fish Shell
+      ansible.builtin.include_tasks: fish-debian.yaml
+      tags:
+        - fish
 
 ## REDHAT FAMILY TASKS BLOCK
 # This block is run when "Redhat" is the host operating systems
