@@ -1,0 +1,68 @@
+---
+# BASE DEBIAN PACKAGES TASKS
+# ==========================
+#
+# This task file manages the installation and upgrade of essential base packages
+# for Debian-based systems.
+#
+# Tasks included:
+#   - Updates apt sources and package cache
+#   - Performs a full system upgrade (dist-upgrade)
+#   - Updates all installed packages to their latest version
+#   - Installs a predefined list of base packages (from the base_packages variable)
+#
+# Usage:
+#   Include this file in your playbook or role to ensure all base packages are present and up to date.
+#
+# Requirements:
+#   - The 'base_packages' variable must be defined (typically in group_vars or host_vars)
+#
+
+- name: Update apt package cache
+  ansible.builtin.apt: 
+    update_cache: yes 
+    state: latest 
+    force_apt_get: yes
+  tags:
+    - install
+
+- name: Upgrade the OS (apt-get dist-upgrade)
+  ansible.builtin.apt: 
+    upgrade: dist
+  tags:
+    - install
+
+- name: Update installed packages to their latest version
+  ansible.builtin.apt: 
+    name: "*"
+    state: latest
+  tags:
+    - install
+    
+- name: Install base packages and auto clean unused packages
+  ansible.builtin.apt: 
+    name: "{{ boilerplate_base_packages }}"
+    state: latest
+    autoclean: yes
+    autoremove: yes
+  tags:
+    - install
+
+- name: Ensure unattended-upgrades package is installed
+  ansible.builtin.apt:
+    name: unattended-upgrades
+    state: present
+  become: true
+  tags:
+    - install
+
+- name: Deploy automatic security updates configuration
+  ansible.builtin.template:
+    src: templates/20auto-upgrades.j2
+    dest: /etc/apt/apt.conf.d/20auto-upgrades
+    owner: root
+    group: root
+    mode: '0644'
+  become: true
+  tags:
+    - install

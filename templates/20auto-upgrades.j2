@@ -1,0 +1,14 @@
+// =============================================================================
+// 20auto-upgrades.j2 - Ansible Template for Debian Automatic Security Updates
+// -----------------------------------------------------------------------------
+// This template configures APT to automatically update package lists and
+// install security updates unattended. Managed by Ansible.
+// Place in /etc/apt/apt.conf.d/20auto-upgrades on Debian/Ubuntu systems.
+//
+// Settings:
+//   - Update-Package-Lists: Enable daily package list updates
+//   - Unattended-Upgrade:   Enable daily unattended upgrades
+// =============================================================================
+
+APT::Periodic::Update-Package-Lists "1";
+APT::Periodic::Unattended-Upgrade "1";
