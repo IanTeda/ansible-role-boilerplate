@@ -1,0 +1,59 @@
+# ==============================================================================
+# Ansible Tasks: networkd-debian.yaml
+# ------------------------------------------------------------------------------
+# Purpose:   Configure systemd-networkd for Debian-based systems.
+#            - Detects the primary wired interface using networkctl.
+#            - Sets a fact for use in subsequent tasks.
+#            - Deploys a templated networkd configuration for the detected interface.
+# Usage:     Once `10-{{ primary_wired_interface }}.network` is deployed use the
+#            following dependencies to ensure interface is up before binding to 
+#            a specific static ip address:
+#            - `After=systemd-networkd-wait-online.service`
+#            - `Requires=systemd-networkd-wait-online.service`
+# Managed:   This file is managed by Ansible. Manual edits may be overwritten.
+# ==============================================================================
+
+- name: Get primary wired interface name using networkctl
+  ansible.builtin.shell: |
+    networkctl list --no-legend --no-pager | awk '$3 == "ether" {print $2}' | head -n1
+  register: wired_interfaces
+  changed_when: false
+  tags:
+    - config
+
+- name: Set fact for primary wired interface
+  ansible.builtin.set_fact:
+    primary_wired_interface: "{{ wired_interfaces.stdout_lines[0] }}"
+  when: wired_interfaces.stdout_lines | length > 0
+  tags:
+    - config
+
+- name: Debug primary wired interface
+  ansible.builtin.debug:
+    msg: "Primary wired interface is {{ primary_wired_interface }}"
+  when: primary_wired_interface is defined
+  tags:
+    - debug
+
+- name: "Deploy Networkd interface config to /etc/systemd/network/10-{{ primary_wired_interface }}.network"
+  ansible.builtin.template:
+    src: templates/networkd-interface.network.j2
+    dest: "/etc/systemd/network/10-{{ primary_wired_interface }}.network"
+    owner: "root"
+    group: "root"
+    mode: '0644'
+    backup: yes
+  become: true
+  tags:
+    - install
+    - config
+
+- name: Restart systemd-networkd after deploying config
+  ansible.builtin.systemd:
+    name: systemd-networkd
+    state: restarted
+    enabled: true
+  become: true
+  tags:
+    - install
+    - config

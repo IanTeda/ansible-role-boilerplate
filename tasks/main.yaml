@@ -57,6 +57,10 @@
       tags:
         - nodejs
 
+    - name: Configure Networkd
+      ansible.builtin.include_tasks: networkd-debian.yaml
+      tags:
+        - networkd
 
 
 ## REDHAT FAMILY TASKS BLOCK
