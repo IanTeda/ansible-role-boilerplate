@@ -57,10 +57,11 @@
       tags:
         - nodejs
 
-    - name: Configure Networkd
-      ansible.builtin.include_tasks: networkd-debian.yaml
+    - name: Install Rootless Podman
+      ansible.builtin.include_tasks: podman-debian.yaml
       tags:
-        - networkd
+        - podman
+
 
 
 ## REDHAT FAMILY TASKS BLOCK

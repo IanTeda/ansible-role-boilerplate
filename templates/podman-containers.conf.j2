@@ -1,0 +1,27 @@
+# ============================================================================
+# Podman containers.conf (Ansible managed)
+# ----------------------------------------------------------------------------
+# This is a minimal Podman configuration file, managed by Ansible.
+# Any manual changes will be overwritten by Ansible.
+#
+# Usage:
+#   - Place this file at ~/.config/containers/containers.conf for rootless Podman
+#   - Or at /etc/containers/containers.conf for system-wide configuration
+#
+# References:
+#   - https://docs.podman.io/en/latest/markdown/containers.conf.5.html
+#   - https://github.com/containers/common/blob/main/pkg/config/containers.conf
+#
+# Description:
+#   - Overrides default settings from /usr/share/containers/containers.conf
+#   - Configures journald logging, user namespaces, and rootless networking
+# ============================================================================
+
+[engine]
+events_logger = "journald"
+
+[containers]
+userns = "auto"
+
+[network]
+default_rootless_network_cmd = "pasta"

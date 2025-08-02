@@ -1,0 +1,323 @@
+# ============================================================================
+# Podman Installation & Management Tasks (Debian)
+# ============================================================================
+# ⚠️ WARNING: This file is managed by Ansible - DO NOT EDIT MANUALLY! ⚠️
+# Any manual changes will be overwritten on the next Ansible run.
+# Edit the template file or Ansible variables instead.
+# -----------------------------------------------------------------------------
+# File: roles/boilerplate/tasks/podman-debian.yaml
+# Purpose: Automated, idempotent installation, configuration, and management of
+#          Podman (rootless and system) on Debian-based systems, following the
+#          00-service-template structure and best practices for production.
+#
+# Features:
+#   - Installs Podman and dependencies from Debian backports
+#   - Configures rootless user, subuid/subgid, and directories
+#   - Deploys secure containers.conf and related config files
+#   - Sets up systemd service and socket for Podman
+#   - Runs healthchecks and version checks
+#   - Supports robust uninstall and cleanup
+#
+# Usage:
+#   - Include this task file in your playbook or role
+#   - Set required variables in group_vars/host_vars or role defaults
+#   - Run with: ansible-playbook ...
+#
+# References:
+#   - https://docs.podman.io/en/latest/
+#   - https://wiki.debian.org/Podman
+#   - https://github.com/containers/podman
+# ============================================================================
+
+---
+
+## 00. SET PODMAN ANSIBLE FACTS
+# This makes it easier to read the ansible tasks
+# -----------------------------------------------------------------------------
+
+- name: Set Podman facts for the role
+  ansible.builtin.set_fact:
+    podman_user: "{{ boilerplate_podman.user }}"
+    podman_group: "{{ boilerplate_podman.group }}"
+    podman_config_dir: "/etc/containers"
+    podman_config_file: "/etc/containers/containers.conf"
+    podman_storage_file: "/etc/containers/storage.conf"
+    podman_registry_file: "/etc/containers/registries.conf" #<-- https://github.com/containers/image/blob/main/docs/containers-registries.conf.5.md
+    podman_mount_file: "/etc/containers/mounts.conf"
+
+    podman_port: "{{ boilerplate_podman.port }}"
+    podman_listen_address: "{{ boilerplate_podman.listen_address }}"
+    podman_systemd_name: "podman"
+  tags: [install, config, verify, healthcheck, uninstall]
+
+- name: Display PostgreSQL variables for debugging
+  ansible.builtin.debug:
+    var: databases_postgres
+  tags: [debug]
+
+# - name: Display Podman facts for debugging
+#   ansible.builtin.debug:
+#     msg:
+#       - "Fact -> podman_user: {{ podman_user }}"
+#       - "Fact -> podman_group: {{ podman_group }}"
+#       - "Fact -> podman_home_dir: {{ podman_home_dir }}"
+#       - "Fact -> podman_config_dir: {{ podman_config_dir }}"
+#       - "Fact -> podman_config_file: {{ podman_config_file }}"
+#       - "Fact -> podman_data_dir: {{ podman_data_dir }}"
+#       - "Fact -> podman_systemd_name: {{ podman_systemd_name }}"
+#       - "Fact -> podman_download_url: {{ podman_download_url }}"
+#   tags:
+#     - debug
+
+- name: Confirm Podman uninstallation
+  ansible.builtin.pause:
+    prompt: |
+      ⚠️  WARNING: Podman Uninstallation Confirmation ⚠️
+
+      You are about to uninstall Podman from this system.
+      
+      This will remove:
+      🗑️  Podman server and client binaries
+
+      ❗ This action will permanently delete ALL containers and data!
+      📊 All Podman data will be lost forever
+
+      Are you sure you want to proceed with the uninstallation? (true/no)
+  register: uninstall_confirmation
+  tags: [never, uninstall]
+
+- name: Podman uninstall aborted
+  ansible.builtin.fail:
+    msg: |
+      🛑 Uninstallation aborted by user choice
+
+      The Podman service remains installed and operational.
+      No changes have been made to the system.
+  when: not (uninstall_confirmation.user_input | bool)
+  tags: [never, uninstall]
+
+
+
+
+# # 01. SHUTDOWN PODMAN SERVICES
+# This section ensures that the service is stopped before config any changes and 
+# updates are applied to prevent conflict issues.
+# -----------------------------------------------------------------------------
+
+- name: Check if Podman service exists
+  ansible.builtin.stat:
+    path: "/lib/systemd/system/{{ podman_systemd_name }}.service"
+  register: service_file
+  tags: [ install, config ]
+
+
+- name: Ensure Podman service is stopped before modifying
+  ansible.builtin.systemd:
+    name: "{{ podman_systemd_name }}"
+    state: stopped
+  become: true
+  failed_when: false
+  when: service_file.stat.exists
+  tags: [ install, config ]
+
+- name: Stop and disable Podman service for uninstallation
+  ansible.builtin.systemd:
+    name: "{{ podman_systemd_name }}"
+    state: stopped
+    enabled: no
+  become: true
+  failed_when: false
+  tags: [never, uninstall ]
+
+
+
+## 02. CREATE PODMAN CONFIG DIRECTORIES
+# This section sets up the system user and group to run the service and create 
+# all the directories for the service
+# -----------------------------------------------------------------------------
+
+- name: Ensure {{ podman_group }} group exists
+  ansible.builtin.group:
+    name: "{{ podman_group }}"
+    state: present
+  become: true
+  tags: [install, user_group]
+
+- name: Create Podman system user "{{ podman_user }}"
+  ansible.builtin.user:
+    name: "{{ podman_user }}"
+    group: "{{ podman_group }}"
+    system: yes
+    shell: /usr/sbin/nologin
+    create_home: false
+    comment: "Podman Service System Account"
+  become: true
+  tags: [user_group, install]
+
+- name: Remove Podman user "{{ podman_user }}" during uninstallation
+  when: uninstall_confirmation.user_input | bool
+  ansible.builtin.user:
+    name: "{{ podman_user }}"
+    state: absent
+    remove: yes
+    force: yes
+  become: true
+  failed_when: false
+  tags: [never, uninstall]
+
+- name: Remove Podman group "{{ podman_group }}" during uninstallation
+  when: uninstall_confirmation.user_input | bool
+  ansible.builtin.group:
+    name: "{{ podman_group }}"
+    state: absent
+  become: true
+  tags: [never, uninstall]
+
+- name: Create directories for Podman service
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: "{{ podman_user }}"
+    group: "{{ podman_group }}"
+    mode: "{{ item.mode }}"
+  loop:
+    - { path: "{{ podman_config_dir }}", mode: "u=rwx,g=rw,o="}
+  become: true
+  tags: [install, directories]
+
+- name: Remove directories for Podman service during uninstallation
+  when: uninstall_confirmation.user_input | bool
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: absent
+  loop:
+    - { path: "{{ podman_config_dir }}", mode: "u=rwx,g=rw,o="}
+  become: true
+  tags: [never, uninstall]
+
+- name: Ensure subuid mapping exists for rootless Podman user
+  ansible.builtin.lineinfile:
+    path: /etc/subuid
+    line: "{{ podman_user }}:100000:65536"
+    create: yes
+    state: present
+    regexp: "^{{ podman_user }}:"
+  become: true
+  tags: [install, user_group, rootless]
+
+- name: Ensure subgid mapping exists for rootless Podman user
+  ansible.builtin.lineinfile:
+    path: /etc/subgid
+    line: "{{ podman_user }}:100000:65536"
+    create: yes
+    state: present
+    regexp: "^{{ podman_user }}:"
+  become: true
+  tags: [install, user_group, rootless]
+
+
+
+## 03. INSTALL PODMAN
+# This section installs Podman and its dependencies from the Debian backports repository.
+# It ensures that the latest version is installed and configured correctly.
+# -----------------------------------------------------------------------------
+
+- name: Add Debian backports repository (if not present)
+  ansible.builtin.apt_repository:
+    repo: "deb http://deb.debian.org/debian {{ ansible_distribution_release }}-backports main"
+    state: present
+    filename: "{{ ansible_distribution_release }}-backports"
+  become: true
+  tags: [install]
+
+- name: Update apt cache after adding backports
+  ansible.builtin.apt:
+    update_cache: yes
+  become: true
+  tags: [install]
+
+- name: Install dependencies and Podman from backports
+  ansible.builtin.apt:
+    name:
+      - podman           # Main container engine, Docker-compatible CLI
+      - uidmap           # User namespace utilities for rootless containers
+      - passt            # Modern user-mode networking for rootless Podman (replaces slirp4netns)
+      - fuse-overlayfs   # Overlay filesystem support for rootless storage
+    state: present
+    default_release: "{{ ansible_distribution_release }}-backports"
+  become: true
+  tags: [install]
+
+
+
+## 04. SETUP CONFIG FILES FOR PODMAN
+# This section sets up the configuration files for Podman, including the main
+# configuration file, registry configuration, and mounts configuration.
+# -----------------------------------------------------------------------------
+
+- name: Deploy Podman container configuration file
+  ansible.builtin.template:
+    src: templates/podman-containers.conf.j2
+    dest: "{{ podman_config_file }}"
+    owner: "root"
+    group: "root"
+    mode: '0644'
+  become: true
+  tags: [install, config]
+
+- name: Check Podman configuration validity
+  ansible.builtin.command: podman info
+  become: true
+  become_user: "root"
+  register: podman_info
+  changed_when: false
+  failed_when: podman_info.rc != 0
+  tags: [install, config]
+
+- name: Enable and start Podman service
+  ansible.builtin.systemd:
+    name: "{{ podman_systemd_name }}"
+    state: restarted
+    enabled: true
+    daemon_reload: true
+  become: true
+  failed_when: false
+  tags: [ install, config ]
+
+
+## 08. HEALTH CHECKS FOR PODMAN
+# This section runs the healthcheck for the service to confirm it is running
+# as expected
+# -----------------------------------------------------------------------------
+
+- name: Ensure podman.socket is enabled and started (for rootless podman)
+  ansible.builtin.systemd:
+    name: podman.socket
+    enabled: true
+    state: started
+  become: true
+  tags: [install, config, verify, healthcheck]
+
+- name: Check podman version
+  ansible.builtin.command: podman --version
+  register: podman_version
+  changed_when: false
+  failed_when: podman_version.rc != 0 or ('podman version' not in podman_version.stdout)
+  tags: [install, config, verify, healthcheck]
+
+- name: Show podman version output
+  ansible.builtin.debug:
+    msg: "Podman version output: {{ podman_version.stdout }}"
+  tags: [install, config, verify, healthcheck]
+
+- name: Run hello-world container with podman
+  ansible.builtin.command: podman run --rm hello-world
+  register: podman_hello
+  changed_when: false
+  failed_when: podman_hello.rc != 0 or ('Hello from Docker!' not in podman_hello.stdout and 'Hello from Podman!' not in podman_hello.stdout)
+  tags: [install, config, verify, healthcheck]
+
+- name: Show podman hello-world output
+  ansible.builtin.debug:
+    msg: "Podman hello-world output: {{ podman_hello.stdout }}"
+  tags: [install, config, verify, healthcheck]

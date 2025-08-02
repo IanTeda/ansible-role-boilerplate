@@ -57,3 +57,7 @@ boilerplate_fish:
 
 boilerplate_nodejs:
   release: 24 # <-- https://nodejs.org/en/download/releases/
+
+boilerplate_podman:
+  user: "podman"
+  group: "podman"
