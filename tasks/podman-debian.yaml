@@ -39,14 +39,13 @@
   ansible.builtin.set_fact:
     podman_user: "{{ boilerplate_podman.user }}"
     podman_group: "{{ boilerplate_podman.group }}"
+    podman_home_dir: "/opt/{{ boilerplate_podman.user }}"
     podman_config_dir: "/etc/containers"
     podman_config_file: "/etc/containers/containers.conf"
     podman_storage_file: "/etc/containers/storage.conf"
-    podman_registry_file: "/etc/containers/registries.conf" #<-- https://github.com/containers/image/blob/main/docs/containers-registries.conf.5.md
+    podman_registries_file: "/etc/containers/registries.conf"
     podman_mount_file: "/etc/containers/mounts.conf"
-
-    podman_port: "{{ boilerplate_podman.port }}"
-    podman_listen_address: "{{ boilerplate_podman.listen_address }}"
+    podman_policy_file: "/etc/containers/policy.json"
     podman_systemd_name: "podman"
   tags: [install, config, verify, healthcheck, uninstall]
 
@@ -55,47 +54,18 @@
     var: databases_postgres
   tags: [debug]
 
-# - name: Display Podman facts for debugging
-#   ansible.builtin.debug:
-#     msg:
-#       - "Fact -> podman_user: {{ podman_user }}"
-#       - "Fact -> podman_group: {{ podman_group }}"
-#       - "Fact -> podman_home_dir: {{ podman_home_dir }}"
-#       - "Fact -> podman_config_dir: {{ podman_config_dir }}"
-#       - "Fact -> podman_config_file: {{ podman_config_file }}"
-#       - "Fact -> podman_data_dir: {{ podman_data_dir }}"
-#       - "Fact -> podman_systemd_name: {{ podman_systemd_name }}"
-#       - "Fact -> podman_download_url: {{ podman_download_url }}"
-#   tags:
-#     - debug
-
-- name: Confirm Podman uninstallation
-  ansible.builtin.pause:
-    prompt: |
-      ⚠️  WARNING: Podman Uninstallation Confirmation ⚠️
-
-      You are about to uninstall Podman from this system.
-      
-      This will remove:
-      🗑️  Podman server and client binaries
-
-      ❗ This action will permanently delete ALL containers and data!
-      📊 All Podman data will be lost forever
-
-      Are you sure you want to proceed with the uninstallation? (true/no)
-  register: uninstall_confirmation
-  tags: [never, uninstall]
-
-- name: Podman uninstall aborted
-  ansible.builtin.fail:
-    msg: |
-      🛑 Uninstallation aborted by user choice
-
-      The Podman service remains installed and operational.
-      No changes have been made to the system.
-  when: not (uninstall_confirmation.user_input | bool)
-  tags: [never, uninstall]
-
+- name: Display Podman facts for debugging
+  ansible.builtin.debug:
+    msg:
+      - "Fact -> podman_config_dir: {{ podman_config_dir }}"
+      - "Fact -> podman_config_file: {{ podman_config_file }}"
+      - "Fact -> podman_group: {{ podman_group }}"
+      - "Fact -> podman_mount_file: {{ podman_mount_file }}"
+      - "Fact -> podman_policy_file: {{ podman_policy_file }}"
+      - "Fact -> podman_registries_file: {{ podman_registries_file }}"
+      - "Fact -> podman_storage_file: {{ podman_storage_file }}"
+      - "Fact -> podman_user: {{ podman_user }}"
+  tags: [debug]
 
 
 
@@ -120,15 +90,6 @@
   when: service_file.stat.exists
   tags: [ install, config ]
 
-- name: Stop and disable Podman service for uninstallation
-  ansible.builtin.systemd:
-    name: "{{ podman_systemd_name }}"
-    state: stopped
-    enabled: no
-  become: true
-  failed_when: false
-  tags: [never, uninstall ]
-
 
 
 ## 02. CREATE PODMAN CONFIG DIRECTORIES
@@ -149,29 +110,11 @@
     group: "{{ podman_group }}"
     system: yes
     shell: /usr/sbin/nologin
-    create_home: false
+    create_home: true
+    home: "{{ podman_home_dir }}"
     comment: "Podman Service System Account"
   become: true
   tags: [user_group, install]
-
-- name: Remove Podman user "{{ podman_user }}" during uninstallation
-  when: uninstall_confirmation.user_input | bool
-  ansible.builtin.user:
-    name: "{{ podman_user }}"
-    state: absent
-    remove: yes
-    force: yes
-  become: true
-  failed_when: false
-  tags: [never, uninstall]
-
-- name: Remove Podman group "{{ podman_group }}" during uninstallation
-  when: uninstall_confirmation.user_input | bool
-  ansible.builtin.group:
-    name: "{{ podman_group }}"
-    state: absent
-  become: true
-  tags: [never, uninstall]
 
 - name: Create directories for Podman service
   ansible.builtin.file:
@@ -181,19 +124,9 @@
     group: "{{ podman_group }}"
     mode: "{{ item.mode }}"
   loop:
-    - { path: "{{ podman_config_dir }}", mode: "u=rwx,g=rw,o="}
+    - { path: "{{ podman_config_dir }}", mode: "0755"}
   become: true
   tags: [install, directories]
-
-- name: Remove directories for Podman service during uninstallation
-  when: uninstall_confirmation.user_input | bool
-  ansible.builtin.file:
-    path: "{{ item.path }}"
-    state: absent
-  loop:
-    - { path: "{{ podman_config_dir }}", mode: "u=rwx,g=rw,o="}
-  become: true
-  tags: [never, uninstall]
 
 - name: Ensure subuid mapping exists for rootless Podman user
   ansible.builtin.lineinfile:
@@ -265,6 +198,26 @@
   become: true
   tags: [install, config]
 
+- name: Deploy Podman registries configuration file
+  ansible.builtin.template:
+    src: templates/podman-registries.conf.j2
+    dest: "{{ podman_registries_file }}"
+    owner: "root"
+    group: "root"
+    mode: '0644'
+  become: true
+  tags: [install, config]
+
+- name: Deploy Podman policy configuration file
+  ansible.builtin.template:
+    src: templates/podman-policy.json.j2
+    dest: "{{ podman_policy_file }}"
+    owner: "root"
+    group: "root"
+    mode: '0644'
+  become: true
+  tags: [install, config]
+
 - name: Check Podman configuration validity
   ansible.builtin.command: podman info
   become: true
@@ -310,14 +263,104 @@
     msg: "Podman version output: {{ podman_version.stdout }}"
   tags: [install, config, verify, healthcheck]
 
-- name: Run hello-world container with podman
-  ansible.builtin.command: podman run --rm hello-world
+- name: Run hello-world container with podman (Ansible module)
+  containers.podman.podman_container:
+    name: hello-world-test
+    image: docker.io/library/hello-world:latest
+    state: started
+    rm: true
+    detach: false
   register: podman_hello
-  changed_when: false
-  failed_when: podman_hello.rc != 0 or ('Hello from Docker!' not in podman_hello.stdout and 'Hello from Podman!' not in podman_hello.stdout)
+  become: true
+  become_user: "{{ podman_user }}"
   tags: [install, config, verify, healthcheck]
 
 - name: Show podman hello-world output
   ansible.builtin.debug:
     msg: "Podman hello-world output: {{ podman_hello.stdout }}"
   tags: [install, config, verify, healthcheck]
+
+
+
+## 09. UNINSTALL PODMAN
+# This section handles the uninstallation of Podman and its dependencies.
+# It ensures that all related files and configurations are removed.
+# -----------------------------------------------------------------------------
+
+- name: Confirm Podman uninstallation
+  ansible.builtin.pause:
+    prompt: |
+      ⚠️  WARNING: Podman Uninstallation Confirmation ⚠️
+
+      You are about to uninstall Podman from this system.
+      
+      This will remove:
+      🗑️  Podman server and client binaries
+
+      ❗ This action will permanently delete ALL containers and data!
+      📊 All Podman data will be lost forever
+
+      Are you sure you want to proceed with the uninstallation? (true/no)
+  register: uninstall_confirmation
+  tags: [never, uninstall]
+
+- name: Podman uninstall aborted
+  ansible.builtin.fail:
+    msg: |
+      🛑 Uninstallation aborted by user choice
+
+      The Podman service remains installed and operational.
+      No changes have been made to the system.
+  when: not (uninstall_confirmation.user_input | bool)
+  tags: [never, uninstall]
+
+- name: Stop and disable Podman service for uninstallation
+  ansible.builtin.systemd:
+    name: "{{ podman_systemd_name }}"
+    state: stopped
+    enabled: no
+  become: true
+  failed_when: false
+  tags: [never, uninstall ]
+
+- name: Remove Podman user "{{ podman_user }}" during uninstallation
+  when: uninstall_confirmation.user_input | bool
+  ansible.builtin.user:
+    name: "{{ podman_user }}"
+    state: absent
+    remove: yes
+    force: yes
+  become: true
+  failed_when: false
+  tags: [never, uninstall]
+
+- name: Remove Podman group "{{ podman_group }}" during uninstallation
+  when: uninstall_confirmation.user_input | bool
+  ansible.builtin.group:
+    name: "{{ podman_group }}"
+    state: absent
+  become: true
+  tags: [never, uninstall]
+
+- name: Remove directories for Podman service during uninstallation
+  when: uninstall_confirmation.user_input | bool
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: absent
+  loop:
+    - { path: "{{ podman_config_dir }}", mode: "0755"}
+  become: true
+  tags: [never, uninstall]
+
+- name: Remove dependencies and Podman from backports
+  when: uninstall_confirmation.user_input | bool
+  ansible.builtin.apt:
+    name:
+      - podman           # Main container engine, Docker-compatible CLI
+      - uidmap           # User namespace utilities for rootless containers
+      - passt            # Modern user-mode networking for rootless Podman (replaces slirp4netns)
+      - fuse-overlayfs   # Overlay filesystem support for rootless storage
+    state: absent
+    default_release: "{{ ansible_distribution_release }}-backports"
+  become: true
+  tags: [never, uninstall]
