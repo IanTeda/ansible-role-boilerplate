@@ -57,11 +57,15 @@
       tags:
         - nodejs
 
-    - name: Install Rootless Podman
+    - name: Install Podman
       ansible.builtin.include_tasks: podman-debian.yaml
       tags:
         - podman
 
+    - name: Install Go
+      ansible.builtin.include_tasks: golang-debian.yaml
+      tags:
+        - golang
 
 
 ## REDHAT FAMILY TASKS BLOCK
