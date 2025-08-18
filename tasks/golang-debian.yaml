@@ -46,8 +46,6 @@
 
 - name: Download latest Go tarball
   get_url:
-    #     https://go.dev/dl/go1.25.linux-amd64.tar.gz"}
-    #     https://go.dev/dl/go1.25.0.linux-arm64.tar.gz
     url: "https://go.dev/dl/go{{ go_install_version }}.linux-amd64.tar.gz"
     dest: "/tmp/go{{ go_install_version }}.linux-amd64.tar.gz"
     mode: '0644'
