@@ -1,0 +1,27 @@
+# Remove default Fish greeting
+set -U fish_greeting ""
+
+# Pretty Fish Welcome
+set_color cyan
+echo
+{{ boilerplate_fish.welcome }}
+echo
+set_color normal
+echo "Date: "(date)
+echo "Hostname: "(hostname)
+echo "IP Address: "(hostname -I | string trim)
+echo "Uptime: "(uptime -p)
+echo "Last login: "(last -n 2 {{ item }} | tail -n 1 | awk '{print $4, $5, $6, $7, $8, $NF}')
+if command -v sensors >/dev/null 2>&1
+    # Try multiple patterns to find CPU temperature
+    set cpu_temp (sensors 2>/dev/null | grep -E '(Package id 0|Core 0|temp1):' | head -1 | awk '{for(i=1;i<=NF;i++) if($i ~ /^\+?[0-9]+\.[0-9]+°C/) print $i}')
+    if test -n "$cpu_temp"
+        echo "CPU Temp: $cpu_temp"
+    else
+        echo "CPU Temp: N/A"
+    end
+else
+    echo "CPU Temp: N/A (sensors not installed)"
+end
+echo "Memory Usage: "(free -h | grep 'Mem:' | awk '{print $3 " / " $2}')
+echo

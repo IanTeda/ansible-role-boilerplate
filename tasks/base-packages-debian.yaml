@@ -23,38 +23,33 @@
     update_cache: yes 
     state: latest 
     force_apt_get: yes
-  tags:
-    - install
+  tags: [install]
 
 - name: Upgrade the OS (apt-get dist-upgrade)
   ansible.builtin.apt: 
     upgrade: dist
-  tags:
-    - install
+  tags: [install]
 
 - name: Update installed packages to their latest version
   ansible.builtin.apt: 
     name: "*"
     state: latest
-  tags:
-    - install
-    
+  tags: [install]
+
 - name: Install base packages and auto clean unused packages
   ansible.builtin.apt: 
     name: "{{ boilerplate_base_packages }}"
     state: latest
     autoclean: yes
     autoremove: yes
-  tags:
-    - install
+  tags: [install]
 
 - name: Ensure unattended-upgrades package is installed
   ansible.builtin.apt:
     name: unattended-upgrades
     state: present
   become: true
-  tags:
-    - install
+  tags: [install]
 
 - name: Deploy automatic security updates configuration
   ansible.builtin.template:
@@ -64,5 +59,4 @@
     group: root
     mode: '0644'
   become: true
-  tags:
-    - install
+  tags: [install]
