@@ -1,0 +1,142 @@
+# ==============================================================================
+# BOILERPLATE ROLE - MOUNT USB DRIVE TASKS
+# ------------------------------------------------------------------------------
+#
+# File: roles/boilerplate/tasks/mount-usb.yaml
+# Purpose: Handles partitioning, formatting, and mounting a USB drive
+#          to the specified data directory for persistent data storage.
+#
+# Features:
+#   - Interactive confirmation before formatting to prevent accidental data loss
+#   - Partitions device with GPT and creates a primary ext4 partition
+#   - Formats the partition with ext4 filesystem
+#   - Checks and repairs filesystem to ensure integrity
+#   - Creates the mount point directory if it does not exist
+#   - Detects the UUID of the target device for reliable mounting
+#   - Mounts the device by UUID with appropriate mount options
+#   - Reloads systemd to recognize new mount configuration
+#
+# Variables required:
+#   - btc_data.mnt: Mount point directory (e.g., /data)
+#   - btc_data.dev: Raw device path (e.g., /dev/sda)
+#   - btc_data.dev1: First partition path (e.g., /dev/sda1)
+#   - btc_data.fstype: Filesystem type (e.g., ext4)
+#
+# Notes:
+#   - Only run formatting tasks when explicitly needed (use --tags format)
+#   - Regular mounting can be done with --tags config
+#   - Ensure the device is not in use before formatting
+#
+# Troubleshooting:
+#   - If mounting fails, check dmesg for device detection issues
+#   - Verify UUID with 'blkid' command
+#   - Ensure mount point permissions allow access
+#   - Check mount with `sudo fdisk -l` to confirm partitioning
+# ==============================================================================
+
+- name: Confirm before formatting the disk
+  ansible.builtin.pause:
+    prompt: "WARNING: This will format {{ boilerplate_mount_data.disk }} as ext4 and erase all data on it. Type 'yes' to continue:"
+  register: format_confirm
+  tags: [format]
+
+- name: Fail if user did not confirm formatting
+  ansible.builtin.fail:
+    msg: "Formatting aborted by user."
+  when: format_confirm.user_input != 'yes'
+  tags: [format]
+
+- name: Partition the disk with a single primary partition
+  ansible.builtin.command: >
+    parted --script {{  boilerplate_mount_data.disk }} mklabel gpt mkpart primary ext4 0% 100%
+  when: format_confirm.user_input == 'yes'
+  become: true
+  tags: [format]
+
+- name: Format {{ boilerplate_mount_data.device }} as ext4
+  ansible.builtin.command: mkfs.ext4 -F {{ boilerplate_mount_data.device }}
+  when: format_confirm.user_input == 'yes'
+  become: true
+  tags: [format]
+
+- name: Wait for device info to update
+  ansible.builtin.wait_for:
+    path: "{{ boilerplate_mount_data.device }}"
+    timeout: 5
+  when: format_confirm.user_input == 'yes'
+  tags: [format]
+
+- name: Check filesystem on device
+  ansible.builtin.command: file -s {{ boilerplate_mount_data.device }}
+  register: fs_check
+  changed_when: false
+  tags: [format, verify]
+
+- name: Debug filesystem check
+  ansible.builtin.debug:
+    var: fs_check.stdout
+  tags: [format, verify]
+
+- name: Check if directory is already mounted
+  ansible.builtin.command: mountpoint {{ boilerplate_mount_data.mnt }}
+  register: mount_check
+  changed_when: false
+  failed_when: false
+  tags: [config]
+
+- name: Unmount if already mounted
+  ansible.builtin.command: umount {{ boilerplate_mount_data.mnt }}
+  become: true
+  when: mount_check.rc == 0
+  tags: [config]
+
+- name: Create directory mount "{{ boilerplate_mount_data.mnt }}"
+  ansible.builtin.file:
+    path: "{{ boilerplate_mount_data.mnt }}"
+    state: directory
+    mode: '0775'
+  tags: [config]
+
+- name: Check and repair filesystem
+  ansible.builtin.command: fsck -p {{ boilerplate_mount_data.device }}
+  become: true
+  register: fsck_result
+  failed_when: false
+  tags: [never, repair]
+
+- name: Get the uuid of the drive
+  # delegate_facts: true
+  ansible.builtin.shell: blkid -s UUID -o value {{ boilerplate_mount_data.device }}
+  register: uuid
+  tags: [config, debug]
+
+- name: Get filesystem type of the drive
+  ansible.builtin.shell: blkid -s TYPE -o value {{ boilerplate_mount_data.device }}
+  register: fs_type
+  tags: [config, debug]
+
+- name: Debug mount information
+  ansible.builtin.debug:
+    msg: 
+      - "UUID={{ uuid.stdout | trim }}"
+      - "Path: {{ boilerplate_mount_data.mnt }}"
+      - "Filesystem: {{ fs_type.stdout | trim  }}"
+      - "Device: {{ boilerplate_mount_data.device }}"
+  tags: [config, debug]
+
+- name: Mount device by UUID
+  ansible.posix.mount:
+    src: "UUID={{ uuid.stdout | trim }}"
+    path: "{{ boilerplate_mount_data.mnt }}"
+    fstype: "{{ fs_type.stdout | trim }}"
+    # opts: defaults,auto,users,rw,nofail,noatime,umask=0002
+    opts: defaults,auto,nofail,noatime
+    dump: 0
+    passno: 2
+    state: mounted
+  tags: [config, debug]
+
+- name: Reload systemd manager configuration
+  ansible.builtin.command: systemctl daemon-reload
+  become: true
+  tags: [config, debug]

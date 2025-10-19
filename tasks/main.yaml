@@ -51,7 +51,12 @@
       ansible.builtin.include_tasks: fish-debian.yaml
       tags:
         - fish
-    
+  
+    - name: Mount USB Drive
+      ansible.builtin.include_tasks: mount-usb.yaml
+      tags:
+        - mount-usb
+
     - name: Install NodeJS Globally
       ansible.builtin.include_tasks: nodejs-debian.yaml
       tags:
