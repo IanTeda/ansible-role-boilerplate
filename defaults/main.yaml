@@ -76,3 +76,7 @@ boilerplate_nodejs:
 boilerplate_podman:
   user: "podman"
   group: "podman"
+
+boilerplate_docker:
+  docker_users:
+    - "{{ vault_default_user_name }}"
