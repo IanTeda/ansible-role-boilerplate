@@ -71,7 +71,7 @@ boilerplate_fish:
     echo "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
 
 boilerplate_nodejs:
-  release: 24 # <-- https://nodejs.org/en/download/releases/
+  release: 25 # <-- https://nodejs.org/en/download/releases/
 
 boilerplate_podman:
   user: "podman"
