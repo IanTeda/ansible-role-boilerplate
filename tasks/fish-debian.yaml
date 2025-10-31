@@ -38,6 +38,42 @@
   loop: "{{ boilerplate_fish.users }}"
   tags: [install, config]
 
+- name: Create Fish functions directory
+  ansible.builtin.file:
+    path: "/home/{{ item }}/.config/fish/functions"
+    state: directory
+    owner: "{{ item }}"
+    group: "{{ item }}"
+    mode: '0755'
+  become: true
+  loop: "{{ boilerplate_fish.users }}"
+  tags: [install, config]
+
+- name: Deploy Fish welcome function
+  ansible.builtin.template:
+    src: "templates/fish-welcome-function.j2"
+    dest: "/home/{{ item }}/.config/fish/functions/fish_welcome.fish"
+    owner: "{{ item }}"
+    group: "{{ item }}"
+    mode: '0644'
+  become: true
+  loop: "{{ boilerplate_fish.users }}"
+  tags: [install, config]
+
+- name: Add call to fish_welcome in config.fish
+  ansible.builtin.blockinfile:
+    path: "/home/{{ item }}/.config/fish/config.fish"
+    block: |
+      # Fish welcome message
+      fish_welcome
+    create: true
+    owner: "{{ item }}"
+    group: "{{ item }}"
+    mode: '0644'
+  become: true
+  loop: "{{ boilerplate_fish.users }}"
+  tags: [install, config]
+
 - name: Automatic detect and configure lm-sensors
   ansible.builtin.command: sensors-detect --auto
   become: true
@@ -59,17 +95,6 @@
   become: true
   notify: Restart Host
   tags: [install, sensors]
-
-- name: Deploy pretty Fish welcome message
-  ansible.builtin.template:
-    src: "templates/fish-welcome.j2"
-    dest: "/home/{{ item }}/.config/fish/config.fish"
-    owner: "{{ item }}"
-    group: "{{ item }}"
-    mode: '0644'
-  become: true
-  loop: "{{ boilerplate_fish.users }}"
-  tags: [install, config]
 
 - name: Verify Fish installation
   ansible.builtin.command: fish --version

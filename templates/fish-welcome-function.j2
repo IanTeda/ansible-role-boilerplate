@@ -1,3 +1,4 @@
+function fish_welcome
 # Remove default Fish greeting
 set -U fish_greeting ""
 
@@ -23,5 +24,7 @@ if command -v sensors >/dev/null 2>&1
 else
     echo "CPU Temp: N/A (sensors not installed)"
 end
+echo "Disk Usage (/): "(df -h / | tail -1 | awk '{print $3 " / " $2}')
 echo "Memory Usage: "(free -h | grep 'Mem:' | awk '{print $3 " / " $2}')
 echo
+end
