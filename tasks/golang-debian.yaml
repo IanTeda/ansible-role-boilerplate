@@ -1,105 +1,60 @@
 ---
 # Tasks to install the latest Go version on Debian servers
 
-- name: Set Golang variables
-  ansible.builtin.set_fact:
-     go_install_version: "{{boilerplate_golang.release | default('1.25.0') }}"
-  tags: [always]
-
-- name: Check if Go is already installed
-  command: go version
-  register: go_version_check
-  failed_when: false
-  changed_when: false
-  tags: [install]
-
-- name: Get currently installed Go version
-  set_fact:
-    current_go_version: "{{ go_version_check.stdout | regex_replace('^go version go([0-9.]+).*', '\\1') }}"
-  when: go_version_check.rc == 0
-  tags: [install]
-
-- name: Determine if Go needs to be installed or updated
-  set_fact:
-    go_needs_update: "{{ go_version_check.rc != 0 or current_go_version is version(go_install_version, '<') }}"
-  tags: [install]
-
 - name: Install required packages for Go installation
-  apt:
+  ansible.builtin.apt:
     name:
-      - wget
-      - curl
-      - tar
+      - software-properties-common
     state: present
     update_cache: true
   become: true
-  when: go_needs_update
   tags: [install]
 
-- name: Remove existing Go installation
-  file:
-    path: /usr/local/go
-    state: absent
+- name: Add Golang backports PPA
+  ansible.builtin.apt_repository:
+    repo: 'ppa:longsleep/golang-backports'
+    state: present
   become: true
-  when: go_needs_update and go_version_check.rc == 0
   tags: [install]
 
-- name: Download latest Go tarball
-  get_url:
-    url: "https://go.dev/dl/go{{ go_install_version }}.linux-amd64.tar.gz"
-    dest: "/tmp/go{{ go_install_version }}.linux-amd64.tar.gz"
-    mode: '0644'
-  when: go_needs_update
-  tags: [install]
-
-- name: Extract Go tarball to /usr/local
-  unarchive:
-    src: "/tmp/go{{ go_install_version }}.linux-amd64.tar.gz"
-    dest: /usr/local
-    remote_src: true
-    owner: root
-    group: root
-    mode: '0755'
+- name: Update apt cache after adding PPA
+  ansible.builtin.apt:
+    update_cache: true
   become: true
-  when: go_needs_update
   tags: [install]
 
-- name: Clean up downloaded tarball
-  file:
-    path: "/tmp/go{{ go_install_version }}.linux-amd64.tar.gz"
-    state: absent
-  when: go_needs_update
+- name: Install Go from APT PPA
+  ansible.builtin.apt:
+    name: golang-go
+    state: latest
+  become: true
   tags: [install]
 
 - name: Add Go binary to PATH in /etc/profile.d
-  copy:
+  ansible.builtin.copy:
     content: |
-      export PATH=$PATH:/usr/local/go/bin
       export GOPATH=$HOME/go
       export GOBIN=$GOPATH/bin
     dest: /etc/profile.d/go.sh
     mode: '0644'
   become: true
-  when: go_needs_update
   tags: [install]
 
 - name: Source Go environment for current session
-  shell: |
-    export PATH=$PATH:/usr/local/go/bin
+  ansible.builtin.shell: |
     export GOPATH=$HOME/go
     export GOBIN=$GOPATH/bin
   changed_when: false
-  when: go_needs_update
   tags: [install]
 
 - name: Verify Go installation
-  command: /usr/local/go/bin/go version
+  ansible.builtin.command: go version
   register: go_install_verification
   changed_when: false
   tags: [install]
 
 - name: Display installed Go version
-  debug:
+  ansible.builtin.debug:
     msg: "Successfully installed Go: {{ go_install_verification.stdout }}"
   tags: [install]
 
@@ -121,6 +76,32 @@
     - pkg
   tags: [install]
 
+- name: Verify Go command is available
+  ansible.builtin.command: which go
+  register: go_which
+  changed_when: false
+  tags: [install, verify]
+
+- name: Assert Go is installed and in PATH
+  ansible.builtin.assert:
+    that: go_which.rc == 0
+    success_msg: "Go is installed and available in PATH"
+    fail_msg: "Go is not found in PATH"
+  tags: [install, verify]
+
+- name: Verify GOPATH is set
+  ansible.builtin.shell: echo $GOPATH
+  register: gopath_check
+  changed_when: false
+  tags: [install, verify]
+
+- name: Assert GOPATH is configured
+  ansible.builtin.assert:
+    that: gopath_check.stdout | length > 0
+    success_msg: "GOPATH is configured: {{ gopath_check.stdout }}"
+    fail_msg: "GOPATH is not set"
+  tags: [install, verify]
+
 - name: Test Go installation with hello world
   copy:
     content: |
@@ -131,41 +112,39 @@
       }
     dest: "/tmp/hello.go"
     mode: '0644'
-  tags: [install]
+  tags: [install, verify]
 
 - name: Compile and run test program
-  shell: |
-    export PATH=$PATH:/usr/local/go/bin
+  ansible.builtin.shell: |
     cd /tmp
-    /usr/local/go/bin/go run hello.go
+    go run hello.go
   register: go_test_output
   changed_when: false
-  tags: [install]
+  tags: [install, verify]
 
 - name: Display test program output
   debug:
     msg: "Go test program output: {{ go_test_output.stdout }}"
-  tags: [install]
+  tags: [install, verify]
 
 - name: Clean up test file
   file:
     path: "/tmp/hello.go"
     state: absent
-  tags: [install]
+  tags: [install, verify]
 
 - name: Display installation summary
-  debug:
+  ansible.builtin.debug:
     msg: |
       Go installation completed successfully!
       Version: {{ go_install_verification.stdout }}
-      Installation path: /usr/local/go
+      Installation path: /usr/bin/go (via apt)
       GOPATH: {{ ansible_env.HOME }}/go
       
       To use Go in your shell, run:
       source /etc/profile.d/go.sh
       
       Or add the following to your ~/.bashrc or ~/.profile:
-      export PATH=$PATH:/usr/local/go/bin
       export GOPATH=$HOME/go
       export GOBIN=$GOPATH/bin
-  tags: [install]
+  tags: [install, verify]
