@@ -78,6 +78,7 @@
   ansible.builtin.command: sensors-detect --auto
   become: true
   changed_when: false
+  when: ansible_architecture != 'aarch64'
   tags: [install, config]
 
 - name: Load coretemp kernel module for CPU temperature sensors
@@ -85,6 +86,7 @@
     name: coretemp
     state: present
   become: true
+  when: ansible_architecture != 'aarch64'
   tags: [install, config]
 
 - name: Ensure coretemp module is loaded at boot
@@ -93,6 +95,7 @@
     line: coretemp
     create: true
   become: true
+  when: ansible_architecture != 'aarch64'
   notify: Restart Host
   tags: [install, sensors]
 

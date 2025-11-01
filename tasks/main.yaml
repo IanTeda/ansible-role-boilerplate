@@ -41,6 +41,11 @@
       ansible.builtin.include_tasks: base-packages-debian.yaml
       tags:
         - base-packages
+    
+    - name: Create and Default User
+      ansible.builtin.include_tasks: default-user.yaml
+      tags:
+        - default-user
 
     - name: Install Lazygit
       ansible.builtin.include_tasks: lazygit-linux.yaml

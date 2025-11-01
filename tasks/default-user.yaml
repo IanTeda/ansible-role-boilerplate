@@ -1,0 +1,80 @@
+---
+# DEFAULT USER CREATION
+# ====================
+#
+# Creates a default user with sudo access, SSH key, and yadm dotfiles.
+# Reference:
+# - https://yadm.io/
+#
+
+- name: Create default user
+  ansible.builtin.user:
+    name: "{{ boilerplate_default_user.name }}"
+    password: "{{ boilerplate_default_user.password }}"
+    shell: /bin/bash
+    groups: sudo
+    append: yes
+    create_home: yes
+    state: present
+  become: true
+  tags: [install]
+
+- name: Create SSH directory for default user
+  ansible.builtin.file:
+    path: "/home/{{ vault_default_user_name }}/.ssh"
+    state: directory
+    owner: "{{ vault_default_user_name }}"
+    group: "{{ vault_default_user_name }}"
+    mode: '0700'
+  become: true
+  tags: [install]
+
+- name: Install yadm
+  ansible.builtin.package:
+    name: yadm
+    state: present
+  become: true
+  tags: [install]
+
+- name: Clone dotfiles repository with yadm
+  ansible.builtin.command: "yadm clone {{ boilerplate_default_user.yadm_repo }}"
+  become: true
+  become_user: "{{ vault_default_user_name }}"
+  args:
+    chdir: "/home/{{ vault_default_user_name }}"
+    creates: "/home/{{ vault_default_user_name }}/.config/yadm/repo.git"
+  tags: [install, config]
+
+- name: Ensure default user has correct ownership of home directory
+  ansible.builtin.file:
+    path: "/home/{{ vault_default_user_name }}"
+    owner: "{{ vault_default_user_name }}"
+    group: "{{ vault_default_user_name }}"
+    recurse: yes
+  become: true
+  tags: [install]
+
+- name: Verify default user creation
+  ansible.builtin.command: "id {{ vault_default_user_name }}"
+  register: user_check
+  changed_when: false
+  become: true
+  tags: [verify]
+
+- name: Show user details
+  ansible.builtin.debug:
+    msg: "User {{ vault_default_user_name }} created: {{ user_check.stdout }}"
+  tags: [verify]
+
+- name: Verify yadm installation
+  ansible.builtin.command: "yadm version"
+  register: yadm_version
+  changed_when: false
+  become: true
+  become_user: "{{ vault_default_user_name }}"
+  tags: [verify]
+
+- name: Show yadm version
+  ansible.builtin.debug:
+    msg: "Yadm version: {{ yadm_version.stdout }}"
+  tags: [verify]

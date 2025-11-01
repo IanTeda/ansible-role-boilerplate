@@ -26,6 +26,11 @@
 boilerplate_hostname: "{{ ansible_hostname | default(ansible_hostname | default('computer')) }}"
 boilerplate_tz: "UTC"
 
+boilerplate_default_user:
+  name: "{{ vault_default_user_name }}"
+  password: "{{ vault_default_user_password | password_hash('sha512') }}"
+  yadm_repo: "{{ vault_default_user_yadm_repo }}"
+
 boilerplate_mount_data:
   dev: "/dev/sda"        # Raw device to use for data mount
   dev1: "/dev/sda1"     # First partition on the device
