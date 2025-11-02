@@ -46,6 +46,11 @@
       ansible.builtin.include_tasks: default-user.yaml
       tags:
         - default-user
+    
+    - name: Hide Ansible User from GDM Login
+      ansible.builtin.include_tasks: hide-ansible-gnome.yaml
+      tags:
+        - ansible-user
 
     - name: Install Lazygit
       ansible.builtin.include_tasks: lazygit-linux.yaml

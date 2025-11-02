@@ -1,0 +1,45 @@
+---
+# HIDE ANSIBLE USER FROM GNOME LOGIN
+# ===================================
+#
+# This task file configures the system to hide the ansible user account from the
+# GNOME Display Manager (GDM) login screen.
+#
+# Tasks included:
+#   - Creates the user configuration file in /var/lib/AccountsService/users/
+#   - Sets SystemAccount=true to hide the user from login
+#   - Restarts the accounts daemon to apply changes
+#
+# References:
+#   - https://askubuntu.com/questions/2471/how-to-hide-users-from-the-gdm-login-screen
+#   - GNOME AccountsService documentation
+#
+# Usage:
+#   Include this file in your playbook or role when you want to prevent the
+#   ansible user from appearing in the graphical login screen.
+---
+
+- name: Touch ansible GTK config file file if it does not exist
+  ansible.builtin.file:
+    path: /var/lib/AccountsService/users/ansible
+    state: touch
+    owner: root
+    group: root
+    mode: u+rw,g-rwx,o-rwx
+    modification_time: preserve
+    access_time: preserve
+  tags:
+    - config
+
+- name: Hide ansible user from GDM login screen
+  ansible.builtin.blockinfile:
+    path: /var/lib/AccountsService/users/ansible
+    block: |
+      [User]
+      Language=   
+      XSession=gnome  
+      SystemAccount=true
+    marker: "## {mark} Hide Ansible Login"
+  notify: Accounts Daemon Restart
+  tags:
+    - config
