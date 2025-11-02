@@ -36,7 +36,6 @@ boilerplate_mount_data:
   dev1: "/dev/sda1"     # First partition on the device
   mnt: "/data"          # Mount point for the data drive
 
-# Copy these to group_vars/debian.yaml and update as needed
 boilerplate_base_packages:
   - apt-listchanges               # Show summary of updates when doing apt upgrade
   - auditd                        # Audit daemon for tracking system events
