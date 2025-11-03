@@ -47,7 +47,7 @@ boilerplate_base_packages:
   - lm-sensors                    # Hardware health monitoring (sensors)
   - lsb-release                   # Linux Standard Base version reporting
   - ncdu                          # Interactive disk usage analyser
-  - neofetch                      # Command-line system information tool
+  - fastfetch                     # Command-line system information tool
   - neovim                        # Modern Vim-based text editor
   - net-tools                     # Legacy networking tools (ifconfig, netstat, etc.)
   - software-properties-common    # Manage software repositories and PPAs

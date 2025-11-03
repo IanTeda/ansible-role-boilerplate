@@ -81,12 +81,22 @@
   when: ansible_architecture != 'aarch64'
   tags: [install, config]
 
+- name: Check if coretemp module is available
+  ansible.builtin.command: modinfo coretemp
+  register: coretemp_check
+  failed_when: false
+  changed_when: false
+  become: true
+  when: ansible_architecture != 'aarch64'
+  tags: [install, config]
+
 - name: Load coretemp kernel module for CPU temperature sensors
   community.general.modprobe:
     name: coretemp
     state: present
   become: true
-  when: ansible_architecture != 'aarch64'
+  when: ansible_architecture != 'aarch64' and coretemp_check.rc == 0
+  failed_when: false
   tags: [install, config]
 
 - name: Ensure coretemp module is loaded at boot
@@ -95,7 +105,7 @@
     line: coretemp
     create: true
   become: true
-  when: ansible_architecture != 'aarch64'
+  when: ansible_architecture != 'aarch64' and coretemp_check.rc == 0
   notify: Restart Host
   tags: [install, sensors]
 

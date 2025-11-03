@@ -19,21 +19,22 @@
 #
 
 - name: Update apt package cache
-  ansible.builtin.apt: 
-    update_cache: yes 
-    state: latest 
-    force_apt_get: yes
+  ansible.builtin.command: apt update
+  become: true
+  changed_when: false
   tags: [install]
 
 - name: Upgrade the OS (apt-get dist-upgrade)
   ansible.builtin.apt: 
     upgrade: dist
+  become: true
   tags: [install]
 
 - name: Update installed packages to their latest version
   ansible.builtin.apt: 
     name: "*"
     state: latest
+  become: true
   tags: [install]
 
 - name: Install base packages and auto clean unused packages
@@ -42,6 +43,7 @@
     state: latest
     autoclean: yes
     autoremove: yes
+  become: true
   tags: [install]
 
 - name: Ensure unattended-upgrades package is installed
