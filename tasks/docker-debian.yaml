@@ -26,10 +26,19 @@
     - lsb-release
   tags: [install]
 
+- name: Create directory for Docker GPG key
+  ansible.builtin.file:
+    path: /etc/apt/keyrings
+    state: directory
+    mode: '0755'
+  become: true
+  tags: [install]
+
 - name: Add Docker GPG key
-  ansible.builtin.apt_key:
+  ansible.builtin.get_url:
     url: https://download.docker.com/linux/debian/gpg
-    state: present
+    dest: /etc/apt/keyrings/docker.asc
+    mode: '0644'
   become: true
   tags: [install]
 
@@ -40,7 +49,7 @@
 
 - name: Add Docker repository
   ansible.builtin.apt_repository:
-    repo: "deb [arch=amd64] https://download.docker.com/linux/{{ docker_repo_distro }} {{ ansible_distribution_release }} stable"
+    repo: "deb [arch=amd64 signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/{{ docker_repo_distro }} {{ ansible_distribution_release }} stable"
     state: present
   become: true
   tags: [install]
