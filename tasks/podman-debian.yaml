@@ -7,10 +7,27 @@
 # - https://podman.io/getting-started/installation
 #
 
+- name: Detect system architecture for Podman
+  ansible.builtin.debug:
+    msg: "Installing Podman on {{ ansible_architecture }} architecture ({{ ansible_distribution }} {{ ansible_distribution_release }})"
+  tags: [install]
+
 - name: Update apt cache
   ansible.builtin.apt:
     update_cache: yes
   become: true
+  tags: [install]
+
+- name: Install Podman prerequisites
+  ansible.builtin.apt:
+    name: "{{ item }}"
+    state: present
+  become: true
+  loop:
+    - apt-transport-https
+    - ca-certificates
+    - curl
+    - gnupg
   tags: [install]
 
 - name: Install Podman
@@ -21,6 +38,9 @@
   loop:
     - podman
     - uidmap         # For rootless containers
+    - crun           # Fast container runtime (preferred over runc on ARM)
+    - netavark       # Network stack
+    - aardvark-dns   # DNS for containers
   tags: [install]
 
 - name: Create Podman user
@@ -58,6 +78,21 @@
 - name: Show Podman version
   ansible.builtin.debug:
     msg: "Podman version: {{ podman_version.stdout }}"
+  tags: [install, config, verify]
+
+- name: Test Podman container functionality
+  ansible.builtin.command: podman run --rm hello-world
+  register: podman_test
+  changed_when: false
+  failed_when: false
+  tags: [install, config, verify]
+
+- name: Show Podman test results
+  ansible.builtin.debug:
+    msg: |
+      Podman container test: {{ 'PASSED' if podman_test.rc == 0 else 'FAILED' }}
+      {{ podman_test.stdout | default('') }}
+      {{ podman_test.stderr | default('') }}
   tags: [install, config, verify]
 
 - name: Verify users are in podman group
