@@ -47,9 +47,14 @@
     docker_repo_distro: "{{ 'ubuntu' if ansible_distribution in ['Ubuntu', 'Pop!_OS'] else 'debian' }}"
   tags: [install]
 
+- name: Set Docker repository architecture
+  ansible.builtin.set_fact:
+    docker_repo_arch: "{{ 'arm64' if ansible_architecture == 'aarch64' else 'amd64' }}"
+  tags: [install]
+
 - name: Add Docker repository
   ansible.builtin.apt_repository:
-    repo: "deb [arch=amd64 signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/{{ docker_repo_distro }} {{ ansible_distribution_release }} stable"
+    repo: "deb [arch={{ docker_repo_arch }} signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/{{ docker_repo_distro }} {{ ansible_distribution_release }} stable"
     state: present
   become: true
   tags: [install]
