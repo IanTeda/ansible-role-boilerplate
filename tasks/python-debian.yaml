@@ -1,0 +1,518 @@
+---
+# ============================================================================
+# PYTHON DEVELOPMENT ENVIRONMENT SETUP
+# ============================================================================
+#
+# Comprehensive Python development environment installation for Debian systems.
+#
+# This role installs:
+#   - Python 3 and pip
+#   - Development tools and libraries
+#   - Virtual environment management
+#   - Code quality and testing tools
+#   - Development IDE/editor support
+#   - Documentation tools
+#
+# Features:
+#   - Multi-version Python support (if needed)
+#   - Virtual environment setup with venv and virtualenv
+#   - Development tools: black, flake8, mypy, pytest
+#   - Poetry for dependency management
+#   - Pre-commit hooks setup
+#
+# Usage:
+#   - Include in playbooks with: include_role: name=boilerplate
+#   - Or run specific tasks with: --tags python-dev
+#
+# Variables:
+#   - boilerplate_python_version: Python version to install (default: system)
+#   - boilerplate_python_venv_dir: Virtual env directory (default: ~/.venvs)
+#   - boilerplate_python_dev_tools: Install development tools (default: true)
+#
+# ============================================================================
+
+# ----------------------------------------------------------------------------
+# PYTHON CORE INSTALLATION
+# ----------------------------------------------------------------------------
+
+- name: Install Python core packages
+  ansible.builtin.apt:
+    name:
+      - python3
+      - python3-pip
+      - python3-venv
+      - python3-dev
+      - python3-setuptools
+      - python3-wheel
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+  become: true
+  tags: [install, python, python-core]
+
+- name: Install Python development libraries
+  ansible.builtin.apt:
+    name:
+      # Core development libraries
+      - build-essential
+      - libssl-dev
+      - libffi-dev
+      - libbz2-dev
+      - liblzma-dev
+      - libreadline-dev
+      - libncurses-dev
+      - libsqlite3-dev
+      - libgdbm-dev
+      - zlib1g-dev
+      # Additional useful libraries
+      - libjpeg-dev
+      - libpng-dev
+      - libfreetype6-dev
+      - libxml2-dev
+      - libxslt-dev
+      - libyaml-dev
+    state: present
+  become: true
+  tags: [install, python, python-dev]
+
+# ----------------------------------------------------------------------------
+# PYTHON PACKAGE MANAGEMENT
+# ----------------------------------------------------------------------------
+
+- name: Upgrade pip to latest version (with fallback for externally managed environments)
+  block:
+    - name: Try to upgrade pip normally (for older Debian versions)
+      ansible.builtin.pip:
+        name: pip
+        state: latest
+        extra_args: --user
+      become: false
+      tags: [install, python, python-pip]
+      register: pip_upgrade_normal
+      ignore_errors: true
+
+    - name: Upgrade pip with break-system-packages (for Debian 12+)
+      ansible.builtin.pip:
+        name: pip
+        state: latest
+        extra_args: --user --break-system-packages
+      become: false
+      tags: [install, python, python-pip]
+      when: pip_upgrade_normal is failed
+      register: pip_upgrade_break_system
+
+    - name: Display pip upgrade status
+      ansible.builtin.debug:
+        msg: |
+          Pip upgrade status:
+          - Normal upgrade: {{ 'succeeded' if pip_upgrade_normal is succeeded else 'failed' }}
+          - Break-system upgrade: {{ 'succeeded' if pip_upgrade_break_system is succeeded else 'not attempted' }}
+          - Note: In Debian 12+, pip uses virtual environments by default for safety
+      tags: [install, python, python-pip]
+
+- name: Install core Python packages
+  ansible.builtin.pip:
+    name:
+      - wheel
+      - setuptools
+      - pip-tools
+      - virtualenv
+    state: latest
+    extra_args: --user --break-system-packages
+  become: false
+  tags: [install, python, python-pip]
+
+# ----------------------------------------------------------------------------
+# DEVELOPMENT TOOLS
+# ----------------------------------------------------------------------------
+
+- name: Install Python development tools
+  ansible.builtin.pip:
+    name:
+      # Code formatting and linting
+      - black
+      - isort
+      - flake8
+      - pylint
+      - mypy
+      # Testing frameworks
+      - pytest
+      - pytest-cov
+      - pytest-xdist
+      - tox
+      # Documentation
+      - sphinx
+      - sphinx-rtd-theme
+      # Type checking
+      - typing-extensions
+      # Development utilities
+      - ipython
+      - jupyter
+      - notebook
+      - jupyterlab
+    state: latest
+    extra_args: --user --break-system-packages
+  become: false
+  tags: [install, python, python-dev-tools]
+  when: boilerplate_python.dev_tools | default(true)
+
+# ----------------------------------------------------------------------------
+# DEPENDENCY MANAGEMENT
+# ----------------------------------------------------------------------------
+
+- name: Install Poetry (Python dependency management)
+  ansible.builtin.shell: |
+    export HOME="/home/{{ boilerplate_python.user }}"
+    curl -sSL https://install.python-poetry.org | python{{ boilerplate_python.version }} -
+    export PATH="$HOME/.local/bin:$PATH"
+    poetry config virtualenvs.in-project true
+  args:
+    creates: "/home/{{ boilerplate_python.user }}/.local/bin/poetry"
+    executable: /bin/bash
+  become: true
+  environment:
+    HOME: "/home/{{ boilerplate_python.user }}"
+  tags: [install, python, python-poetry]
+  when: boilerplate_python.poetry | default(true)
+
+- name: Install pipenv (alternative dependency management)
+  ansible.builtin.pip:
+    name: pipenv
+    state: latest
+    extra_args: --user --break-system-packages
+  become: false
+  tags: [install, python, python-pipenv]
+
+# ----------------------------------------------------------------------------
+# VIRTUAL ENVIRONMENT MANAGEMENT
+# ----------------------------------------------------------------------------
+
+- name: Create virtual environments directory
+  ansible.builtin.file:
+    path: "/home/{{ boilerplate_python.user }}/.venvs"
+    state: directory
+    mode: '0755'
+    owner: "{{ boilerplate_python.user }}"
+    group: "{{ boilerplate_python.user }}"
+  become: true
+  tags: [install, python, python-venv]
+  when: boilerplate_python.dev_tools | default(true)
+
+- name: Create default virtual environment
+  ansible.builtin.command: python{{ boilerplate_python.version }} -m venv /home/{{ boilerplate_python.user }}/.venvs/default
+  args:
+    creates: "/home/{{ boilerplate_python.user }}/.venvs/default"
+  become: true
+  become_user: "{{ boilerplate_python.user }}"
+  tags: [install, python, python-venv]
+  when: boilerplate_python.dev_tools | default(true)
+
+- name: Install common packages in default virtualenv
+  ansible.builtin.pip:
+    name:
+      - requests
+      - python-dotenv
+      - click
+      - rich
+    state: present
+    virtualenv: "/home/{{ boilerplate_python.user }}/.venvs/default"
+  become: true
+  become_user: "{{ boilerplate_python.user }}"
+  tags: [install, python, python-venv]
+  when: boilerplate_python.dev_tools | default(true)
+
+# ----------------------------------------------------------------------------
+# DEVELOPMENT SCRIPTS AND CONFIGURATION
+# ----------------------------------------------------------------------------
+
+- name: Create Python development scripts directory
+  ansible.builtin.file:
+    path: "/home/{{ boilerplate_python.user }}/.python-dev"
+    state: directory
+    mode: '0755'
+    owner: "{{ boilerplate_python.user }}"
+    group: "{{ boilerplate_python.user }}"
+  become: true
+  tags: [install, python, python-scripts]
+  when: boilerplate_python.dev_tools | default(true)
+
+- name: Create Python environment activation script
+  ansible.builtin.copy:
+    content: |
+      #!/bin/bash
+      # Python Development Environment Setup
+      # Source this file to set up your Python development environment
+
+      # Add local bin to PATH
+      export PATH="$HOME/.local/bin:$PATH"
+
+      # Python virtual environments
+      export WORKON_HOME="/home/{{ boilerplate_python.user }}/.venvs"
+      export VIRTUALENVWRAPPER_PYTHON="$(which python3)"
+      export VIRTUALENVWRAPPER_VIRTUALENV="$HOME/.local/bin/virtualenv"
+
+      # Poetry configuration
+      export POETRY_VIRTUALENVS_IN_PROJECT=true
+      export POETRY_NO_INTERACTION=1
+
+      # Python development aliases
+      alias py='python3'
+      alias pip='python3 -m pip'
+      alias venv='python3 -m venv'
+      alias activate='source .venv/bin/activate 2>/dev/null || source venv/bin/activate 2>/dev/null || echo "No virtual environment found"'
+      alias deactivate='deactivate 2>/dev/null || true'
+
+      # Development shortcuts
+      alias pytest='python3 -m pytest'
+      alias black='python3 -m black'
+      alias flake8='python3 -m flake8'
+      alias mypy='python3 -m mypy'
+
+      echo "Python development environment loaded!"
+      echo "Available commands: py, pip, venv, activate, pytest, black, flake8, mypy"
+    dest: "/home/{{ boilerplate_python.user }}/.python-dev/activate.sh"
+    owner: "{{ boilerplate_python.user }}"
+    group: "{{ boilerplate_python.user }}"
+    mode: '0644'
+  become: true
+  tags: [install, python, python-scripts]
+  when: boilerplate_python.dev_tools | default(true)
+
+- name: Create pre-commit configuration template
+  ansible.builtin.copy:
+    content: |
+      # .pre-commit-config.yaml
+      repos:
+        - repo: https://github.com/pre-commit/pre-commit-hooks
+          rev: v4.4.0
+          hooks:
+            - id: trailing-whitespace
+            - id: end-of-file-fixer
+            - id: check-yaml
+            - id: check-added-large-files
+
+        - repo: https://github.com/psf/black
+          rev: 23.7.0
+          hooks:
+            - id: black
+
+        - repo: https://github.com/pycqa/isort
+          rev: 5.12.0
+          hooks:
+            - id: isort
+
+        - repo: https://github.com/pycqa/flake8
+          rev: 6.0.0
+          hooks:
+            - id: flake8
+
+        - repo: https://github.com/pre-commit/mirrors-mypy
+          rev: v1.5.1
+          hooks:
+            - id: mypy
+    dest: "/home/{{ boilerplate_python.user }}/.python-dev/pre-commit-config.yaml.template"
+    owner: "{{ boilerplate_python.user }}"
+    group: "{{ boilerplate_python.user }}"
+    mode: '0644'
+  become: true
+  tags: [install, python, python-scripts]
+  when: boilerplate_python.dev_tools | default(true)
+
+# ----------------------------------------------------------------------------
+# IDE/EDITOR SUPPORT
+# ----------------------------------------------------------------------------
+
+- name: Install Python language server (for editors)
+  ansible.builtin.pip:
+    name:
+      - python-lsp-server
+      - pylsp-mypy
+    state: latest
+    extra_args: --user --break-system-packages
+  become: false
+  tags: [install, python, python-lsp]
+  when: boilerplate_python.lsp | default(true)
+  ignore_errors: true
+
+# ----------------------------------------------------------------------------
+# JUPYTER NOTEBOOK CONFIGURATION
+# ----------------------------------------------------------------------------
+
+- name: Configure Jupyter Notebook
+  ansible.builtin.command: |
+    jupyter notebook --generate-config
+    jupyter nbextension enable --py --sys-prefix widgetsnbextension
+  args:
+    creates: "/home/{{ boilerplate_python.user }}/.jupyter/jupyter_notebook_config.py"
+  become: true
+  environment:
+    PATH: "/home/{{ boilerplate_python.user }}/.local/bin:{{ ansible_env.PATH }}"
+    HOME: "/home/{{ boilerplate_python.user }}"
+  tags: [install, python, python-jupyter]
+  when: boilerplate_python.jupyter | default(true)
+
+- name: Install Jupyter extensions
+  ansible.builtin.pip:
+    name:
+      - jupyter-contrib-nbextensions
+      - jupyter-nbextensions-configurator
+    state: latest
+    extra_args: --user --break-system-packages
+  become: false
+  tags: [install, python, python-jupyter]
+  when: boilerplate_python.jupyter | default(true)
+
+# ----------------------------------------------------------------------------
+# VERIFICATION AND TESTING
+# ----------------------------------------------------------------------------
+
+- name: Verify Python installation
+  ansible.builtin.command: python3 --version
+  register: python_version
+  changed_when: false
+  tags: [verify, python]
+
+- name: Verify pip installation
+  ansible.builtin.command: python3 -m pip --version
+  register: pip_version
+  changed_when: false
+  tags: [verify, python]
+
+- name: Verify virtualenv creation works
+  ansible.builtin.command: python3 -m venv /tmp/test-venv
+  args:
+    creates: /tmp/test-venv
+  become: false
+  tags: [verify, python]
+
+- name: Test virtualenv activation and package installation
+  ansible.builtin.pip:
+    name: requests
+    state: present
+    virtualenv: /tmp/test-venv
+  become: false
+  tags: [verify, python]
+
+- name: Clean up test virtualenv
+  ansible.builtin.file:
+    path: /tmp/test-venv
+    state: absent
+  tags: [verify, python]
+
+- name: Test development tools installation
+  ansible.builtin.shell: |
+    source /home/{{ boilerplate_python.user }}/.python-dev/activate.sh
+    which black && which flake8 && which mypy && which pytest
+  register: dev_tools_check
+  changed_when: false
+  failed_when: dev_tools_check.rc != 0
+  become: true
+  environment:
+    HOME: "/home/{{ boilerplate_python.user }}"
+  tags: [verify, python]
+  when: boilerplate_python.dev_tools | default(true)
+
+# ----------------------------------------------------------------------------
+# SUMMARY AND DOCUMENTATION
+# ----------------------------------------------------------------------------
+
+- name: Display Python installation summary
+  ansible.builtin.debug:
+    msg: |
+      ==================================================
+      PYTHON DEVELOPMENT ENVIRONMENT INSTALLED!
+      ==================================================
+
+      Python Version: {{ python_version.stdout }}
+      Pip Version: {{ pip_version.stdout }}
+
+      Installed Components:
+      ✓ Python 3 with development headers
+      ✓ pip package manager (upgraded)
+      ✓ Virtual environment support
+      {% if boilerplate_python.dev_tools | default(true) %}✓ Development tools (black, flake8, mypy, pytest){% endif %}
+      {% if boilerplate_python.poetry | default(true) %}✓ Poetry dependency management{% endif %}
+      {% if boilerplate_python.jupyter | default(true) %}✓ Jupyter notebook environment{% endif %}
+      {% if boilerplate_python.lsp | default(true) %}✓ Python Language Server for editors{% endif %}
+
+      {% if boilerplate_python.dev_tools | default(true) %}
+      Virtual Environments:
+      - Default venv: /home/{{ boilerplate_python.user }}/.venvs/default
+      - Venv directory: /home/{{ boilerplate_python.user }}/.venvs/
+
+      Development Scripts:
+      - Activation script: /home/{{ boilerplate_python.user }}/.python-dev/activate.sh
+      - Pre-commit template: /home/{{ boilerplate_python.user }}/.python-dev/pre-commit-config.yaml.template
+
+      To activate the development environment:
+      sudo -u {{ boilerplate_python.user }} bash -c 'source /home/{{ boilerplate_python.user }}/.python-dev/activate.sh'
+
+      Useful commands:
+      - py, pip, venv, activate, deactivate
+      - pytest, black, flake8, mypy
+      - poetry, pipenv
+      {% endif %}
+
+      Next steps:
+      1. {% if boilerplate_python.dev_tools | default(true) %}Source the activation script in your shell{% else %}Ensure Python 3 and pip are working{% endif %}
+      2. Create a new project: mkdir myproject && cd myproject
+      3. Set up virtualenv: python3 -m venv .venv && {% if boilerplate_python.dev_tools | default(true) %}activate{% else %}source .venv/bin/activate{% endif %}
+      4. Install dependencies: pip install -r requirements.txt
+      ==================================================
+  tags: [install, python, summary]
+
+- name: Create Python development quickstart guide
+  ansible.builtin.copy:
+    content: |
+      # Python Development Environment Quickstart
+
+      ## Environment Setup
+      source ~/.python-dev/activate.sh
+
+      ## Project Creation
+      mkdir myproject && cd myproject
+      python3 -m venv .venv
+      source .venv/bin/activate
+      pip install --upgrade pip
+
+      ## Development Workflow
+      # Install dependencies
+      pip install requests click rich
+
+      # Create requirements file
+      pip freeze > requirements.txt
+
+      # Code formatting
+      black *.py
+      isort *.py
+
+      # Code quality checks
+      flake8 *.py
+      mypy *.py
+
+      # Testing
+      pytest
+
+      ## Using Poetry (alternative)
+      poetry new myproject
+      cd myproject
+      poetry add requests
+      poetry install
+      poetry shell
+
+      ## Jupyter Notebook
+      jupyter notebook
+      # Or: jupyter lab
+
+      ## Pre-commit Hooks
+      cp ~/.python-dev/pre-commit-config.yaml.template .pre-commit-config.yaml
+      pip install pre-commit
+      pre-commit install
+      pre-commit run --all-files
+    dest: "/home/{{ boilerplate_python.user }}/PYTHON_DEV_README.md"
+    owner: "{{ boilerplate_python.user }}"
+    group: "{{ boilerplate_python.user }}"
+    mode: '0644'
+  become: true
+  tags: [install, python, documentation]
+  when: boilerplate_python.dev_tools | default(true)

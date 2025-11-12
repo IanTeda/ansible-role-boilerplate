@@ -77,6 +77,15 @@ boilerplate_fish:
 boilerplate_nodejs:
   release: 25 # <-- https://nodejs.org/en/download/releases/
 
+boilerplate_python:
+  version: "3"  # Python major version (3 for python3)
+  venv_dir: "{{ ansible_env.HOME }}/.venvs"
+  user: "{{ vault_default_user_name }}"  # User for Python development environment
+  dev_tools: true
+  poetry: true
+  jupyter: true
+  lsp: true
+
 boilerplate_podman:
   user: "podman"
   group: "podman"

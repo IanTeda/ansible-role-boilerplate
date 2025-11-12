@@ -87,6 +87,10 @@
       tags:
         - golang
 
+    - name: Install Python
+      ansible.builtin.include_tasks: python-debian.yaml
+      tags:
+        - python
 
 ## REDHAT FAMILY TASKS BLOCK
 # This block is run when "Redhat" is the host operating systems
