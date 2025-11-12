@@ -71,7 +71,7 @@
 
 - name: Verify Node.js version matches expected release
   ansible.builtin.assert:
-    that: "nodejs_version.stdout | regex_search('^v' + boilerplate_nodejs.release)"
+    that: "nodejs_version.stdout | regex_search('^v' + (boilerplate_nodejs.release | string))"
     fail_msg: "Installed Node.js version {{ nodejs_version.stdout }} does not match expected release {{ boilerplate_nodejs.release }}"
     success_msg: "Node.js {{ boilerplate_nodejs.release }}.x is correctly installed"
   tags: [install, verify]
