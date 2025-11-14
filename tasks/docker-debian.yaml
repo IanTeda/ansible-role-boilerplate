@@ -24,6 +24,7 @@
     - curl
     - gnupg
     - lsb-release
+    - python3-docker
   tags: [install]
 
 - name: Create directory for Docker GPG key
@@ -74,6 +75,9 @@
     - docker-ce
     - docker-ce-cli
     - containerd.io
+    - docker-compose-plugin
+    - docker-buildx-plugin
+    - docker-ce-rootless-extras
   tags: [install]
 
 - name: Start and enable Docker service
@@ -103,6 +107,21 @@
   ansible.builtin.debug:
     msg: "Docker version: {{ docker_version.stdout }}"
   tags: [install, config, verify]
+
+- name: Verify Docker service is running
+  ansible.builtin.systemd:
+    name: docker
+    state: started
+  become: true
+  register: docker_service_check
+  tags: [install, config, verify, healthcheck]
+
+- name: Assert Docker service is active
+  ansible.builtin.assert:
+    that: docker_service_check.changed == false
+    fail_msg: "Docker service is not running!"
+    success_msg: "Docker service is running."
+  tags: [install, config, verify, healthcheck]
 
 - name: Verify users are in docker group
   ansible.builtin.command: "groups {{ item }}"
